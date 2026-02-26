@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net/http"
 
@@ -10,6 +11,10 @@ import (
 )
 
 func main() {
+	port := flag.Int("port", 2767, "http server port number")
+
+	flag.Parse()
+
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
@@ -20,8 +25,8 @@ func main() {
 		w.Write([]byte("Upload Scoop save data to sync server"))
 	})
 
-	fmt.Println("[ Starting Scoop Server... ]")
+	fmt.Printf("[ Starting Scoop Server on Port %d ... ]\n", *port)
 
-	// should allow user to change the port
-	http.ListenAndServe("0.0.0.0:2767", r)
+	addr := fmt.Sprintf("0.0.0.0:%d", *port)
+	http.ListenAndServe(addr, r)
 }
