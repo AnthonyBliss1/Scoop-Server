@@ -21,6 +21,7 @@ func main() {
 
 	r.Get("/sync", handlers.ReadServerData)
 
+	// TODO: create handler for writing to server files
 	r.Post("/upload", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Upload Scoop save data to sync server"))
 	})

@@ -1,5 +1,12 @@
 package types
 
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"sync"
+)
+
 type Method string
 
 const (
@@ -50,4 +57,88 @@ type DNSOverride struct {
 type ServerPayload struct {
 	Collections []Collection  `json:"collections"`
 	DNS         []DNSOverride `json:"dns"`
+
+	mu sync.Mutex
+}
+
+func (s *ServerPayload) PopulateCollections(path string) error {
+	// Make the folder structure if it doesnt exist,
+	// if path already exist then MkdirAll returns nil (does nothing)
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return err
+	}
+
+	dirEntries, err := os.ReadDir(path)
+	if err != nil {
+		return err
+	}
+
+	for _, coll := range dirEntries {
+		var c Collection
+
+		file := filepath.Join(path, coll.Name())
+
+		// file extension safeguard
+		// (all collection files are json)
+		ext := filepath.Ext(file)
+		if ext != ".json" {
+			continue
+		}
+
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return err
+		}
+
+		if err := json.Unmarshal(b, &c); err != nil {
+			return err
+		}
+
+		// add to collections
+		s.mu.Lock()
+		s.Collections = append(s.Collections, c)
+		s.mu.Unlock()
+	}
+
+	return nil
+}
+
+func (s *ServerPayload) PopulateDNSOverrides(path string) error {
+	// Make the folder structure if it doesnt exist,
+	// if path already exist then MkdirAll returns nil (does nothing)
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return err
+	}
+
+	// All DNS Overrides are stored in a single file
+	path = filepath.Join(path, "overrides.json")
+
+	b, err := os.ReadFile(path)
+	if err != nil {
+		// on error, make sure the file is created
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
+			return err
+		}
+
+		// attempt read again
+		b, err = os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// empty file safeguard
+	if len(b) == 0 {
+		s.DNS = []DNSOverride{}
+		return nil
+	}
+
+	if err := json.Unmarshal(b, &s.DNS); err != nil {
+		return err
+	}
+
+	return nil
 }

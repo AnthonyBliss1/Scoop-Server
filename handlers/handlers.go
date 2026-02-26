@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/anthonybliss1/Scoop-Server/types"
-	"github.com/anthonybliss1/Scoop-Server/utils"
 )
 
 func ReadServerData(w http.ResponseWriter, r *http.Request) {
@@ -23,21 +23,36 @@ func ReadServerData(w http.ResponseWriter, r *http.Request) {
 	serverCollections := filepath.Join(base, "Scoop", "Collections")
 	serverDNS := filepath.Join(base, "Scoop", "DNS")
 
+	var payload types.ServerPayload
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, 2)
+
+	wg.Add(2)
+
 	// Grab All Collections
-	collections, err := utils.GrabCollections(serverCollections)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	go func() {
+		defer wg.Done()
+		if err := payload.PopulateCollections(serverCollections); err != nil {
+			errCh <- err
+		}
+	}()
 
 	// Grab DNS Overrides
-	dns, err := utils.GrabDNSOverrides(serverDNS)
-	if err != nil {
+	go func() {
+		defer wg.Done()
+		if err := payload.PopulateDNSOverrides(serverDNS); err != nil {
+			errCh <- err
+		}
+	}()
+
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	payload := types.ServerPayload{Collections: collections, DNS: dns}
 
 	b, err := json.Marshal(payload)
 	if err != nil {
