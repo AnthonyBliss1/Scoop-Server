@@ -17,11 +17,7 @@ func StartServer(port *int) {
 	r.Use(middleware.Logger)
 
 	r.Get("/sync", handlers.ReadServerData)
-
-	// TODO: create handler for writing to server files
-	r.Post("/upload", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Upload Scoop save data to sync server"))
-	})
+	r.Post("/upload", handlers.WriteServerData)
 
 	fmt.Printf("[ Starting Scoop Server on Port %d ... ]\n", *port)
 

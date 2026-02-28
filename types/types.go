@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -103,6 +104,33 @@ func (s *ServerPayload) PopulateCollections(path string) error {
 	return nil
 }
 
+func (s *ServerPayload) WriteCollections(path string) error {
+	// Make the folder structure if it doesnt exist,
+	// if path already exist then MkdirAll returns nil (does nothing)
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, c := range s.Collections {
+		b, err := json.MarshalIndent(c, "", "  ")
+		if err != nil {
+			return err
+		}
+
+		fn := fmt.Sprintf("%s.json", c.Name)
+		newFPath := filepath.Join(path, fn)
+
+		if err := os.WriteFile(newFPath, b, 0o644); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (s *ServerPayload) PopulateDNSOverrides(path string) error {
 	// Make the folder structure if it doesnt exist,
 	// if path already exist then MkdirAll returns nil (does nothing)
@@ -137,6 +165,31 @@ func (s *ServerPayload) PopulateDNSOverrides(path string) error {
 	}
 
 	if err := json.Unmarshal(b, &s.DNS); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *ServerPayload) WriteDNSOverrides(path string) error {
+	// Make the folder structure if it doesnt exist,
+	// if path already exist then MkdirAll returns nil (does nothing)
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return err
+	}
+
+	// All DNS Overrides are stored in a single file
+	path = filepath.Join(path, "overrides.json")
+
+	s.mu.Lock()
+	b, err := json.MarshalIndent(s.DNS, "", "  ")
+	if err != nil {
+		return err
+	}
+	s.mu.Unlock()
+
+	// overwrite the server file with payload data
+	if err := os.WriteFile(path, b, 0o644); err != nil {
 		return err
 	}
 
