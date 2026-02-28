@@ -2,32 +2,21 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"net/http"
 
-	"github.com/anthonybliss1/Scoop-Server/handlers"
-	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
+	"github.com/anthonybliss1/Scoop-Server/cmd"
 )
 
 func main() {
 	port := flag.Int("port", 2767, "http server port number")
+	deploy := flag.Bool("deploy", false, "deploy systemd or launchd service")
 
 	flag.Parse()
 
-	r := chi.NewRouter()
+	switch *deploy {
+	case true:
+		cmd.StartDeploy(port)
 
-	r.Use(middleware.Logger)
-
-	r.Get("/sync", handlers.ReadServerData)
-
-	// TODO: create handler for writing to server files
-	r.Post("/upload", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Upload Scoop save data to sync server"))
-	})
-
-	fmt.Printf("[ Starting Scoop Server on Port %d ... ]\n", *port)
-
-	addr := fmt.Sprintf("0.0.0.0:%d", *port)
-	http.ListenAndServe(addr, r)
+	default:
+		cmd.StartServer(port)
+	}
 }
