@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/fatih/color"
 )
 
 const (
@@ -27,7 +29,12 @@ const (
 	`
 )
 
-var lxHome = regexp.MustCompile(`^/home/([^/]+)/`)
+var (
+	green = color.New(color.FgGreen)
+	blue  = color.New(color.FgBlue)
+
+	lxHome = regexp.MustCompile(`^/home/([^/]+)/`)
+)
 
 func DeploySystemD(port *int) error {
 	bPath, err := os.Executable()
@@ -51,24 +58,24 @@ func DeploySystemD(port *int) error {
 
 	bDir := filepath.Dir(bPath)
 
-	fmt.Println("[ Binary path identified ... ]")
+	green.Println("[ Binary path identified ... ]")
 
 	unitText := fmt.Sprintf(systemDTemp, user, bDir, bPath)
 
-	fmt.Println("[ Creating unit file ... ]")
+	green.Println("[ Creating unit file ... ]")
 
 	servicePath := "/etc/systemd/system/scoop-server.service"
 	if err := os.WriteFile(servicePath, []byte(unitText), 0o644); err != nil {
 		return err
 	}
 
-	fmt.Println("[ Reloading systemctl daemon ... ]")
+	green.Println("[ Reloading systemctl daemon ... ]")
 
 	if out, err := exec.Command("systemctl", "daemon-reload").CombinedOutput(); err != nil {
 		return fmt.Errorf("daemon-reload failed: %q (%s)", err, string(out))
 	}
 
-	fmt.Println("[ Enabling service ... ]")
+	green.Println("[ Enabling service ... ]")
 
 	if out, err := exec.Command("systemctl", "enable", "scoop-server.service").CombinedOutput(); err != nil {
 		if !strings.Contains(string(out), "is enabled") {
@@ -76,7 +83,7 @@ func DeploySystemD(port *int) error {
 		}
 	}
 
-	fmt.Println("[ Restarting service ... ]")
+	green.Println("[ Restarting service ... ]")
 
 	if out, err := exec.Command("systemctl", "restart", "scoop-server.service").CombinedOutput(); err != nil {
 		return fmt.Errorf("restart failed: %q (%s)", err, string(out))
@@ -93,9 +100,9 @@ func ConfirmUser(user *string) error {
 	for !ok {
 		switch *user {
 		case "":
-			fmt.Println("> Please enter the user below: ")
+			blue.Println("> Please enter the user below: ")
 
-			fmt.Print("> ")
+			blue.Print("> ")
 			u, err := ScanUser(scanner)
 			if err != nil {
 				return err
@@ -104,10 +111,10 @@ func ConfirmUser(user *string) error {
 			*user = u
 
 		default:
-			fmt.Println("> Please confirm the user")
-			fmt.Printf("> Is %s correct? (y/n)\n", *user)
+			blue.Println("> Please confirm the user")
+			blue.Printf("> Is %s correct? (y/n)\n", *user)
 
-			fmt.Print("> ")
+			blue.Print("> ")
 			ok = ScanConfirm(scanner)
 
 			if !ok {
