@@ -2,11 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"runtime"
 
 	"github.com/anthonybliss1/Scoop-Server/handlers"
+	"github.com/anthonybliss1/Scoop-Server/types"
 	"github.com/anthonybliss1/Scoop-Server/utils"
+
 	"github.com/fatih/color"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -17,7 +20,7 @@ var (
 	red   = color.New(color.FgRed)
 )
 
-func StartServer(port *int) {
+func StartServer(o types.Options) {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
@@ -31,28 +34,54 @@ func StartServer(port *int) {
 ░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░░░░░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀░▀`
 
 	color.Green(text)
-	green.Printf("\n[ Starting Scoop Server on Port %d ... ]\n", *port)
 
-	addr := fmt.Sprintf("0.0.0.0:%d", *port)
-	http.ListenAndServe(addr, r)
+	addr := fmt.Sprintf("0.0.0.0:%d", o.Port)
+
+	switch o.TLSMode {
+	case "off":
+		green.Printf("\n[ Scoop Server running on Port %d ... ]\n", o.Port)
+		http.ListenAndServe(addr, r)
+
+	case "manual":
+		green.Println("\n[ TLS enabled ... ]")
+		green.Printf("[ Scoop Server running on Port %d ... ]\n", o.Port)
+		http.ListenAndServeTLS(addr, o.Cert, o.PKey, r)
+
+	case "self":
+		// generated cert and key paths are written to o.Cert and o.PKey
+		green.Println("\n[ TLS enabled ... ]")
+		green.Printf("[ Scoop Server running at https://%s:%d ... ]\n", o.PrivateIP, o.Port)
+		http.ListenAndServeTLS(addr, o.Cert, o.PKey, r)
+		return
+
+	case "acme":
+		red.Println("> -tls-mode=acme not setup yet")
+		return
+
+	// this should never fire
+	default:
+		log.Fatalf("Failed assertion for -tls-mode: %q\n", o.TLSMode)
+	}
 }
 
-func StartDeploy(port *int) {
+func StartDeploy(o types.Options) {
 	os := runtime.GOOS
 
 	switch os {
 	case "darwin":
 		// TODO: Add macos support (launchD)
 		red.Println("> LaunchD currently not supported! ")
+		return
 
 	case "linux":
 		green.Println("[ Linux OS identified ... ]")
 
-		if err := utils.DeploySystemD(port); err != nil {
+		if err := utils.DeploySystemD(o); err != nil {
 			red.Println(err)
 			return
 		}
 
 		green.Println("\n> Scoop-Service successfully deployed!")
+		return
 	}
 }

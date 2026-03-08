@@ -62,6 +62,19 @@ type ServerPayload struct {
 	mu sync.Mutex
 }
 
+// all potential flags consolidated into this struct
+
+type Options struct {
+	Port      int
+	Deploy    bool
+	TLSMode   string
+	Cert      string
+	PKey      string
+	Domain    string
+	Email     string
+	PrivateIP string
+}
+
 func (s *ServerPayload) PopulateCollections(path string) error {
 	// Make the folder structure if it doesnt exist,
 	// if path already exist then MkdirAll returns nil (does nothing)
@@ -148,11 +161,9 @@ func (s *ServerPayload) PopulateDNSOverrides(path string) error {
 			return err
 		}
 
-		// attempt read again
-		b, err = os.ReadFile(path)
-		if err != nil {
-			return err
-		}
+		// instead of reading an empty file, will set b to an empty slice
+		// which is handled below
+		b = []byte{}
 	}
 
 	s.mu.Lock()

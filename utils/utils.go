@@ -2,17 +2,30 @@ package utils
 
 import (
 	"bufio"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
+	"log"
+	"math/big"
+	"net"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
+	"github.com/anthonybliss1/Scoop-Server/types"
 	"github.com/fatih/color"
 )
 
+// TODO: write logs to file
 const (
 	systemDTemp = `[Unit]
 	Description=scoop-server
@@ -36,7 +49,7 @@ var (
 	lxHome = regexp.MustCompile(`^/home/([^/]+)/`)
 )
 
-func DeploySystemD(port *int) error {
+func DeploySystemD(o types.Options) error {
 	bPath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to find binary path: %q", err)
@@ -54,7 +67,15 @@ func DeploySystemD(port *int) error {
 	fmt.Println()
 
 	// add port to exec path
-	bPath = fmt.Sprintf("%s -port=%d", bPath, *port)
+	bPath = fmt.Sprintf("%s -port=%d", bPath, o.Port)
+
+	// modify exec start command if tls is enabled
+	// since the 'self' options creates the cert and key before this deploy step,
+	// the exec function can just be manual and pointed to the created cert and key
+	// instead of creating the cert and key everytime the service is started
+	if o.TLSMode == "manual" || o.TLSMode == "self" {
+		bPath = fmt.Sprintf("%s -tls-mode=manual -cert=%s -key=%s", bPath, o.Cert, o.PKey)
+	}
 
 	bDir := filepath.Dir(bPath)
 
@@ -148,4 +169,114 @@ func ScanConfirm(scanner *bufio.Scanner) bool {
 	}
 
 	return input == "y"
+}
+
+func GenerateSelfCertAndKey() (cPath string, kPath string, localIP string, err error) {
+	localIP = GetLocalIP().String()
+
+	hosts := []string{"localhost", "127.0.0.1", localIP}
+	cPath = "cert.pem"
+	kPath = "key.pem"
+
+	var dnsNames []string
+	var ipAddrs []net.IP
+
+	for _, h := range hosts {
+		if ip := net.ParseIP(h); ip != nil {
+			ipAddrs = append(ipAddrs, ip)
+		} else {
+			dnsNames = append(dnsNames, h)
+		}
+	}
+
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to generate privateKey: %q", err)
+	}
+
+	notBefore := time.Now()
+	notAfter := notBefore.AddDate(10, 0, 0) // valid for 10 years
+
+	serialLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialLimit)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to generate serialNumber: %q", err)
+	}
+
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName: "localhost",
+		},
+		NotBefore: notBefore,
+		NotAfter:  notAfter,
+
+		DNSNames:    dnsNames,
+		IPAddresses: ipAddrs,
+
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	b, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to generate Certificate: %q", err)
+	}
+
+	certOutput, err := os.Create(cPath)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to create Certificate Output: %q", err)
+	}
+	defer certOutput.Close()
+
+	if err := pem.Encode(certOutput, &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: b,
+	}); err != nil {
+		return "", "", "", fmt.Errorf("failed to encode certificate PEM: %q", err)
+	}
+
+	keyBytes, err := x509.MarshalECPrivateKey(privateKey)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to marshal private key: %q", err)
+	}
+
+	keyOutput, err := os.OpenFile(kPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to open key file: %q", err)
+	}
+	defer keyOutput.Close()
+
+	if err := pem.Encode(keyOutput, &pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: keyBytes,
+	}); err != nil {
+		return "", "", "", fmt.Errorf("failed to encode key PEM: %q", err)
+	}
+
+	// validate cert / key that were created
+	if err := ValidateCertAndKey(cPath, kPath); err != nil {
+		return "", "", "", fmt.Errorf("cannot validate generated cert/key pair: %q", err)
+	}
+
+	return cPath, kPath, localIP, nil
+}
+
+func ValidateCertAndKey(certPath string, keyPath string) error {
+	_, err := tls.LoadX509KeyPair(certPath, keyPath)
+
+	return err
+}
+
+func GetLocalIP() net.IP {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+
+	localAddress := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddress.IP
 }

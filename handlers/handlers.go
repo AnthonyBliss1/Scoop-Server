@@ -19,8 +19,6 @@ func ReadServerData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Search Scoop-Server Config
-	// Using the actual Scoop dir for testing
-	// will change to Scoop-Server/Collections & /DNS
 	serverCollections := filepath.Join(base, "Scoop-Server", "Collections")
 	serverDNS := filepath.Join(base, "Scoop-Server", "DNS")
 
@@ -72,8 +70,6 @@ func WriteServerData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Search Scoop-Server Config
-	// Using the actual Scoop dir for testing
-	// will change to Scoop-Server/Collections & /DNS
 	serverCollections := filepath.Join(base, "Scoop-Server", "Collections")
 	serverDNS := filepath.Join(base, "Scoop-Server", "DNS")
 

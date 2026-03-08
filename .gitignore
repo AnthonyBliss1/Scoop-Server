@@ -1,1 +1,3 @@
 build/
+cert.pem
+key.pem
