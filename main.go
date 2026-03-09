@@ -7,27 +7,28 @@ import (
 	"github.com/anthonybliss1/Scoop-Server/types"
 	"github.com/anthonybliss1/Scoop-Server/utils"
 	"github.com/fatih/color"
+	"golang.org/x/crypto/acme/autocert"
 )
 
 var red = color.New(color.FgRed)
 
 func main() {
-	// TODO: should use -tls-mode = off | manual | self | acme
 	// manual would require user to provide cert and pkey paths
 	// self would generate self signed cert to use
-	// acme would use autocert for domains
+	// acme would use autocert for certificate management
 
 	port := flag.Int("port", 2767, "http server port number")
 	deploy := flag.Bool("deploy", false, "deploy systemd or launchd service")
-
 	tlsMode := flag.String("tls-mode", "off", "off | manual | self | acme")
 
-	var privateIP string
+	var (
+		privateIP string
+		acManager *autocert.Manager
+	)
+
 	cert := flag.String("cert", "", "tls cert file path")
 	pKey := flag.String("key", "", "path to private key file")
-
 	domain := flag.String("domain", "", "public domain for ACME")
-	email := flag.String("email", "", "contact emailf for ACME")
 
 	// help := flag.Bool("help", false, "show all flags and descriptions")
 
@@ -72,10 +73,14 @@ func main() {
 			return
 		}
 
-		if *email == "" {
-			red.Println("> -tsl-mode=acme requires -email")
+		// acme TLSMode will run on the default https port
+		if *port != 2767 {
+			red.Println("> -tls-mode=acme does not allow -port ")
 			return
 		}
+
+		// pass *domain for HostWhitelist
+		acManager = utils.ConfigureAutoCert(*domain)
 
 	default:
 		red.Printf("> Invalid use of -tls-mode: %q\n", *tlsMode)
@@ -89,8 +94,8 @@ func main() {
 		Cert:      *cert,
 		PKey:      *pKey,
 		Domain:    *domain,
-		Email:     *email,
 		PrivateIP: privateIP,
+		ACManager: acManager,
 	}
 
 	switch *deploy {

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"golang.org/x/crypto/acme/autocert"
 )
 
 type Method string
@@ -71,8 +73,8 @@ type Options struct {
 	Cert      string
 	PKey      string
 	Domain    string
-	Email     string
 	PrivateIP string
+	ACManager *autocert.Manager
 }
 
 func (s *ServerPayload) PopulateCollections(path string) error {

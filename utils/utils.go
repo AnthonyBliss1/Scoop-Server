@@ -23,23 +23,24 @@ import (
 
 	"github.com/anthonybliss1/Scoop-Server/types"
 	"github.com/fatih/color"
+	"golang.org/x/crypto/acme/autocert"
 )
 
 // TODO: write logs to file
 const (
 	systemDTemp = `[Unit]
-	Description=scoop-server
-	After=network.target
+Description=scoop-server
+After=network.target
 
-	[Service]
-	User=%s
-	WorkingDirectory=%s
-	ExecStart=%s
-	Restart=on-failure
+[Service]
+User=%s
+WorkingDirectory=%s
+ExecStart=%s
+Restart=on-failure
 
-	[Install]
-	WantedBy=multi-user.target
-	`
+[Install]
+WantedBy=multi-user.target
+`
 )
 
 var (
@@ -66,8 +67,10 @@ func DeploySystemD(o types.Options) error {
 	}
 	fmt.Println()
 
-	// add port to exec path
-	bPath = fmt.Sprintf("%s -port=%d", bPath, o.Port)
+	// add custom port to exec path
+	if o.Port != 2767 {
+		bPath = fmt.Sprintf("%s -port=%d", bPath, o.Port)
+	}
 
 	// modify exec start command if tls is enabled
 	// since the 'self' options creates the cert and key before this deploy step,
@@ -75,6 +78,10 @@ func DeploySystemD(o types.Options) error {
 	// instead of creating the cert and key everytime the service is started
 	if o.TLSMode == "manual" || o.TLSMode == "self" {
 		bPath = fmt.Sprintf("%s -tls-mode=manual -cert=%s -key=%s", bPath, o.Cert, o.PKey)
+	}
+
+	if o.TLSMode == "acme" {
+		bPath = fmt.Sprintf("%s -tls-mode=acme -domain=%s", bPath, o.Domain)
 	}
 
 	bDir := filepath.Dir(bPath)
@@ -261,6 +268,14 @@ func GenerateSelfCertAndKey() (cPath string, kPath string, localIP string, err e
 	}
 
 	return cPath, kPath, localIP, nil
+}
+
+func ConfigureAutoCert(domain string) *autocert.Manager {
+	return &autocert.Manager{
+		Prompt:     autocert.AcceptTOS,
+		HostPolicy: autocert.HostWhitelist(domain),
+		Cache:      autocert.DirCache("certs"),
+	}
 }
 
 func ValidateCertAndKey(certPath string, keyPath string) error {

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
@@ -52,11 +53,31 @@ func StartServer(o types.Options) {
 		green.Println("\n[ TLS enabled ... ]")
 		green.Printf("[ Scoop Server running at https://%s:%d ... ]\n", o.PrivateIP, o.Port)
 		http.ListenAndServeTLS(addr, o.Cert, o.PKey, r)
-		return
 
 	case "acme":
-		red.Println("> -tls-mode=acme not setup yet")
-		return
+		green.Println("\n[ TLS managed with autocert ... ]")
+
+		// start server on port 80 to handle ACME challenge
+		go func() {
+			if err := http.ListenAndServe(":80", o.ACManager.HTTPHandler(nil)); err != nil {
+				red.Printf("> %q\n", err)
+				return
+			}
+		}()
+
+		s := &http.Server{
+			Addr:    ":443",
+			Handler: r,
+			TLSConfig: &tls.Config{
+				GetCertificate: o.ACManager.GetCertificate,
+			},
+		}
+
+		green.Printf("[ Scoop Server running on Port 443 ... ]\n")
+		if err := s.ListenAndServeTLS("", ""); err != nil {
+			red.Printf("> %q\n", err)
+			return
+		}
 
 	// this should never fire
 	default:
