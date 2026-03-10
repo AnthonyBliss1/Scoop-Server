@@ -26,7 +26,6 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-// TODO: write logs to file
 const (
 	systemDTemp = `[Unit]
 Description=scoop-server
@@ -36,6 +35,8 @@ After=network.target
 User=%s
 WorkingDirectory=%s
 ExecStart=%s
+StandardOutput=append:%s
+StandardError=append:%s
 Restart=on-failure
 
 [Install]
@@ -88,7 +89,8 @@ func DeploySystemD(o types.Options) error {
 
 	green.Println("[ Binary path identified ... ]")
 
-	unitText := fmt.Sprintf(systemDTemp, user, bDir, bPath)
+	logPath := "/var/log/scoop-server/scoop-server.log"
+	unitText := fmt.Sprintf(systemDTemp, user, bDir, bPath, logPath, logPath)
 
 	green.Println("[ Creating unit file ... ]")
 
