@@ -75,7 +75,7 @@ func main() {
 
 		// acme TLSMode will run on the default https port
 		if *port != 2767 {
-			red.Println("> -tls-mode=acme does not allow -port ")
+			red.Println("> -tls-mode=acme does not allow -port the default is :443")
 			return
 		}
 
