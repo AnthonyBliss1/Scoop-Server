@@ -30,6 +30,7 @@ func main() {
 	pKey := flag.String("key", "", "path to private key file")
 	domain := flag.String("domain", "", "public domain for ACME")
 
+	// TODO: add help flag
 	// help := flag.Bool("help", false, "show all flags and descriptions")
 
 	flag.Parse()

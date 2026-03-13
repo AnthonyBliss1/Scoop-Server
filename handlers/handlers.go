@@ -111,3 +111,8 @@ func WriteServerData(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Server files sucessfully updated"))
 }
+
+func CheckHealth(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Server healthy"))
+}
