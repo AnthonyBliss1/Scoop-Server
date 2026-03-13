@@ -35,8 +35,8 @@ After=network.target
 User=%s
 WorkingDirectory=%s
 ExecStart=%s
-StandardOutput=append:%s
-StandardError=append:%s
+StandardOutput=%s
+StandardError=%s
 Restart=on-failure
 
 [Install]
