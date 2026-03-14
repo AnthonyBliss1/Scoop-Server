@@ -30,6 +30,7 @@ type Request struct {
 	URL     string `json:"url"`
 	Headers []KV   `json:"headers"`
 	QParams []KV   `json:"query_params"`
+	Body    string `json:"body"`
 }
 
 type Response struct {
@@ -38,6 +39,7 @@ type Response struct {
 	Headers     []KV   `json:"headers"`
 	Body        string `json:"body"`
 	Duration    int64  `json:"duration"`
+	Size        int64  `json:"size"`
 	ContentType string `json:"content_type"`
 }
 
