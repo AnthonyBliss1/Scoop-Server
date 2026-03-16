@@ -9,7 +9,28 @@ import (
 	"sync"
 
 	"github.com/anthonybliss1/Scoop-Server/types"
+	"github.com/anthonybliss1/Scoop-Server/utils"
 )
+
+var key string
+
+func init() {
+	key, _ = utils.GetAPIKey()
+}
+
+func APIKeyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiKey := r.Header.Get("X-API-Key")
+
+		if apiKey == "" || apiKey != key {
+			http.Error(w, "Unauthorized: Invalid or missing API key", http.StatusUnauthorized)
+			return
+		}
+
+		// proceed
+		next.ServeHTTP(w, r)
+	})
+}
 
 func ReadServerData(w http.ResponseWriter, r *http.Request) {
 	base, err := os.UserConfigDir()
@@ -59,6 +80,8 @@ func ReadServerData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(b))
 }
 

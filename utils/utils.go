@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"log"
@@ -35,9 +36,10 @@ After=network.target
 User=%s
 WorkingDirectory=%s
 ExecStart=%s
-StandardOutput=%s
-StandardError=%s
+StandardOutput=append:%s
+StandardError=append:%s
 Restart=on-failure
+LoadCredentialEncrypted=api_key:%s
 
 [Install]
 WantedBy=multi-user.target
@@ -51,7 +53,65 @@ var (
 	lxHome = regexp.MustCompile(`^/home/([^/]+)/`)
 )
 
-func DeploySystemD(o types.Options) error {
+func GenerateAPIKey() (key string, err error) {
+	b := make([]byte, 32)
+
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+
+	key = "ss-" + base64.RawURLEncoding.EncodeToString(b)
+
+	return key, nil
+}
+
+func GetAPIKey() (string, error) {
+	credDir := strings.TrimSpace(os.Getenv("CREDENTIALS_DIRECTORY"))
+	if credDir == "" {
+		return "", fmt.Errorf("CREDENTIALS_DIRECTORY is not set")
+	}
+
+	path := filepath.Join(credDir, "api_key")
+
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read credential %q: %w", path, err)
+	}
+
+	key := strings.TrimSpace(string(b))
+	if key == "" {
+		return "", fmt.Errorf("api_key credential is empty")
+	}
+
+	return key, nil
+}
+
+func SetAPIKey(key, credPath string) error {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return fmt.Errorf("empty api key")
+	}
+
+	if err := os.MkdirAll(filepath.Dir(credPath), 0o700); err != nil {
+		return err
+	}
+
+	tmp := credPath + ".tmp"
+	if err := os.WriteFile(tmp, []byte(key), 0o600); err != nil {
+		return err
+	}
+	defer os.Remove(tmp)
+
+	if out, err := exec.Command(
+		"systemd-creds", "--name=api_key", "encrypt", tmp, credPath,
+	).CombinedOutput(); err != nil {
+		return fmt.Errorf("%w (%s)", err, out)
+	}
+
+	return nil
+}
+
+func DeploySystemD(o types.Options, key string) error {
 	bPath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to find binary path: %q", err)
@@ -90,7 +150,18 @@ func DeploySystemD(o types.Options) error {
 	green.Println("[ Binary path identified ... ]")
 
 	logPath := "/var/log/scoop-server/scoop-server.log"
-	unitText := fmt.Sprintf(systemDTemp, user, bDir, bPath, logPath, logPath)
+	credPath := "/etc/scoop-server/api_key.cred"
+
+	// make sure log directory exists
+	if err := os.MkdirAll("/var/log/scoop-server", 0o755); err != nil {
+		return err
+	}
+
+	if err := SetAPIKey(key, credPath); err != nil {
+		return err
+	}
+
+	unitText := fmt.Sprintf(systemDTemp, user, bDir, bPath, logPath, logPath, credPath)
 
 	green.Println("[ Creating unit file ... ]")
 

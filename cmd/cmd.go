@@ -24,6 +24,20 @@ var (
 func StartServer(o types.Options) {
 	r := chi.NewRouter()
 
+	var usingKey bool
+	key, err := utils.GetAPIKey()
+	if err != nil {
+		usingKey = false
+	} else {
+		if key != "" {
+			usingKey = true
+		}
+	}
+
+	if usingKey {
+		r.Use(handlers.APIKeyMiddleware)
+	}
+
 	r.Use(middleware.Logger)
 
 	r.Get("/sync", handlers.ReadServerData)
@@ -38,6 +52,10 @@ func StartServer(o types.Options) {
 	color.Green(text)
 
 	addr := fmt.Sprintf("0.0.0.0:%d", o.Port)
+
+	if usingKey {
+		green.Println("\n[ Using API Key ... ]")
+	}
 
 	switch o.TLSMode {
 	case "off":
@@ -98,10 +116,18 @@ func StartDeploy(o types.Options) {
 	case "linux":
 		green.Println("[ Linux OS identified ... ]")
 
-		if err := utils.DeploySystemD(o); err != nil {
-			red.Println(err)
+		key, err := utils.GenerateAPIKey()
+		if err != nil {
+			red.Printf("%q\n", err)
 			return
 		}
+
+		if err := utils.DeploySystemD(o, key); err != nil {
+			red.Printf("> %q\n", err)
+			return
+		}
+
+		green.Printf("[ X-API-KEY: %s ]\n", key)
 
 		green.Println("\n> Scoop-Service successfully deployed!")
 		return
