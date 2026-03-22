@@ -24,7 +24,7 @@ Scoop-Server has multiple flag options
 | Flag        | Description                    |
 |------------ | ------------------------------ |
 | -port=XXXX  | Specify port (default 2767)    |
-| -deploy     | Create a systemD service       |
+| -deploy     | Create a systemD service and generate an API Key      |
 | -tls-mode   | Enables TLS (HTTPS), options are: `manual`, `self`, or `acme`             |
 | -cert       | Path to certificate file, required for `-tls-mode=manual` |
 | -key        | Path to key file, required for `-tls-mode=manual` |
@@ -33,6 +33,14 @@ Scoop-Server has multiple flag options
 
 > [!IMPORTANT]
 > When running with the `-deploy` flag the executable must be run with `sudo`
+
+### Deploy
+- `-deploy` is the proper way to use Scoop Server to integrate sync correctly within the Scoop application
+- Using `-deploy` asks a few prompts before creating a systemD service
+  - Because of this, the program may need to be run with `sudo`
+- `-deploy` also generates an `X-API-Key`
+  - The Scoop application requires this `X-API-Key` when setting the sync server
+- Testing can be done without `-deploy` using a browser or even Scoop itself
 
 ### TLS-Mode
 - The `tls-mode` flag offers 3 different options:
