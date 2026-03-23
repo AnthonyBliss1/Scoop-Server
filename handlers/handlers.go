@@ -89,6 +89,8 @@ func ReadServerData(w http.ResponseWriter, r *http.Request) {
 }
 
 func WriteServerData(w http.ResponseWriter, r *http.Request) {
+	handlersMU = &sync.Mutex{}
+
 	base, err := os.UserConfigDir()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -99,20 +101,20 @@ func WriteServerData(w http.ResponseWriter, r *http.Request) {
 	serverCollections := filepath.Join(base, "Scoop-Server", "Collections")
 	serverDNS := filepath.Join(base, "Scoop-Server", "DNS")
 
-	// wipe coll and dns dirs
+	// wipe just coll dir (dns already does an overwrite)
 	// this would obv not scale, will come back to this and do some tmp dir indiana jones switch
 	// mutex is a bit of a bandaid here
-	handlersMU.Lock()
-	if err := os.Remove(serverCollections); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 
-	if err := os.Remove(serverDNS); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	handlersMU.Lock()
+	defer handlersMU.Unlock()
+
+	if err := os.RemoveAll(serverCollections); err != nil {
+		// wont handle the error if its a does not exist error
+		if !os.IsNotExist(err) {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
-	handlersMU.Unlock()
 
 	var payload types.ServerPayload
 
