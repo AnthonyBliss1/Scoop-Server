@@ -12,7 +12,10 @@ import (
 	"github.com/anthonybliss1/Scoop-Server/utils"
 )
 
-var key string
+var (
+	key        string
+	handlersMU *sync.Mutex
+)
 
 func init() {
 	key, _ = utils.GetAPIKey()
@@ -95,6 +98,21 @@ func WriteServerData(w http.ResponseWriter, r *http.Request) {
 	// Search Scoop-Server Config
 	serverCollections := filepath.Join(base, "Scoop-Server", "Collections")
 	serverDNS := filepath.Join(base, "Scoop-Server", "DNS")
+
+	// wipe coll and dns dirs
+	// this would obv not scale, will come back to this and do some tmp dir indiana jones switch
+	// mutex is a bit of a bandaid here
+	handlersMU.Lock()
+	if err := os.Remove(serverCollections); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := os.Remove(serverDNS); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	handlersMU.Unlock()
 
 	var payload types.ServerPayload
 
