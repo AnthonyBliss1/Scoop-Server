@@ -44,12 +44,14 @@ type Response struct {
 }
 
 type Scoop struct {
+	ID       string   `json:"id"`
 	Name     string   `json:"name"`
 	Request  Request  `json:"request"`
 	Response Response `json:"response"`
 }
 
 type Collection struct {
+	ID     string  `json:"id"`
 	Name   string  `json:"name"`
 	Scoops []Scoop `json:"scoops"`
 }
@@ -137,7 +139,7 @@ func (s *ServerPayload) WriteCollections(path string) error {
 			return err
 		}
 
-		fn := fmt.Sprintf("%s.json", c.Name)
+		fn := fmt.Sprintf("%s.json", c.ID)
 		newFPath := filepath.Join(path, fn)
 
 		if err := os.WriteFile(newFPath, b, 0o644); err != nil {
