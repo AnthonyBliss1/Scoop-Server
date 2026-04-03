@@ -41,6 +41,7 @@ func StartServer(o types.Options) {
 	r.Use(middleware.Logger)
 
 	r.Get("/sync", handlers.ReadServerData)
+	r.Get("/data", handlers.FetchSyncData)
 	r.Get("/health", handlers.CheckHealth)
 	r.Post("/upload", handlers.WriteServerData)
 

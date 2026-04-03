@@ -61,9 +61,15 @@ type DNSOverride struct {
 	IPV4     string `json:"ipv4"`
 }
 
+type SyncData struct {
+	VersionNum  int    `json:"versionNum"`
+	LastUpdated string `json:"lastUpdated"`
+}
+
 type ServerPayload struct {
 	Collections []Collection  `json:"collections"`
 	DNS         []DNSOverride `json:"dns"`
+	SyncData    `json:"syncData"`
 
 	mu sync.Mutex
 }
@@ -206,6 +212,65 @@ func (s *ServerPayload) WriteDNSOverrides(path string) error {
 	s.mu.Unlock()
 
 	// overwrite the server file with payload data
+	if err := os.WriteFile(path, b, 0o644); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// path parameter for SyncData funcs should be the Scoop dir
+// to first check if the top level dir exists before writing the Sync Data file
+
+func (s *ServerPayload) PopulateSyncData(path string) error {
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return err
+	}
+
+	path = filepath.Join(path, "sync.json")
+
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if err := os.WriteFile(path, nil, 0o644); err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+
+		b = []byte{}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(b) == 0 {
+		s.SyncData = SyncData{}
+		return nil
+	}
+
+	if err := json.Unmarshal(b, &s.SyncData); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *ServerPayload) WriteSyncData(path string) error {
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return err
+	}
+
+	path = filepath.Join(path, "sync.json")
+
+	s.mu.Lock()
+	b, err := json.MarshalIndent(s.SyncData, "", "  ")
+	if err != nil {
+		return err
+	}
+	s.mu.Unlock()
+
 	if err := os.WriteFile(path, b, 0o644); err != nil {
 		return err
 	}

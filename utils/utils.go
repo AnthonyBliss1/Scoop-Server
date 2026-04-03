@@ -368,3 +368,7 @@ func GetLocalIP() net.IP {
 
 	return localAddress.IP
 }
+
+func CompareVersionNum(localData, payload types.SyncData) (ok bool) {
+	return localData.VersionNum == payload.VersionNum
+}

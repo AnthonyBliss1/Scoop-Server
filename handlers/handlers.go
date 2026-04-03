@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/anthonybliss1/Scoop-Server/types"
 	"github.com/anthonybliss1/Scoop-Server/utils"
@@ -43,15 +45,16 @@ func ReadServerData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Search Scoop-Server Config
+	scoopDir := filepath.Join(base, "Scoop-Server")
 	serverCollections := filepath.Join(base, "Scoop-Server", "Collections")
 	serverDNS := filepath.Join(base, "Scoop-Server", "DNS")
 
 	var payload types.ServerPayload
 
 	var wg sync.WaitGroup
-	errCh := make(chan error, 2)
+	errCh := make(chan error, 3)
 
-	wg.Add(2)
+	wg.Add(3)
 
 	// Grab All Collections
 	go func() {
@@ -65,6 +68,14 @@ func ReadServerData(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		if err := payload.PopulateDNSOverrides(serverDNS); err != nil {
+			errCh <- err
+		}
+	}()
+
+	// Grab Sync Data
+	go func() {
+		defer wg.Done()
+		if err := payload.PopulateSyncData(scoopDir); err != nil {
 			errCh <- err
 		}
 	}()
@@ -98,6 +109,7 @@ func WriteServerData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Search Scoop-Server Config
+	scoopDir := filepath.Join(base, "Scoop-Server")
 	serverCollections := filepath.Join(base, "Scoop-Server", "Collections")
 	serverDNS := filepath.Join(base, "Scoop-Server", "DNS")
 
@@ -131,10 +143,24 @@ func WriteServerData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var wg sync.WaitGroup
-	errCh := make(chan error, 2)
+	// need to validate no stale data has been received from the client before updating
+	localData := types.ServerPayload{}
+	localData.PopulateSyncData(scoopDir)
 
-	wg.Add(2)
+	if ok := utils.CompareVersionNum(localData.SyncData, payload.SyncData); !ok {
+		err := errors.New("data received by server is stale, please pull to update local data")
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity) // Status Code 422
+		return
+	}
+
+	// update VersionNum and LastUpdated
+	payload.VersionNum += 1
+	payload.LastUpdated = time.Now().String()
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, 3)
+
+	wg.Add(3)
 
 	// write collections data to server files
 	go func() {
@@ -151,8 +177,45 @@ func WriteServerData(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	go func() {
+		defer wg.Done()
+		if err := payload.WriteSyncData(scoopDir); err != nil {
+			errCh <- err
+		}
+	}()
+
+	respBody := types.SyncData{VersionNum: payload.VersionNum, LastUpdated: payload.LastUpdated}
+
+	b, err := json.Marshal(respBody)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+	}
+
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Server files sucessfully updated"))
+	w.Write(b) // write the updated syncData in the resp
+}
+
+func FetchSyncData(w http.ResponseWriter, r *http.Request) {
+	base, err := os.UserConfigDir()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	scoopDir := filepath.Join(base, "Scoop-Server")
+
+	payload := types.ServerPayload{}
+	payload.PopulateSyncData(scoopDir)
+
+	b, err := json.Marshal(payload.SyncData)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(b))
 }
 
 func CheckHealth(w http.ResponseWriter, r *http.Request) {
